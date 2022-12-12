@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
@@ -8,6 +9,8 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart' as intl;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
 void main() => runApp(const SwitchApp());
 
@@ -191,6 +194,7 @@ class _SwitchAppState extends State<SwitchApp> {
         lichterkette = Lichterkette.fromJson(jsonDecode(response.body));
         setState(() {
           _connected = true;
+          updateTimepoint(); // last successful interaction
         });
         return lichterkette!;
       } else {
@@ -216,12 +220,21 @@ class _SwitchAppState extends State<SwitchApp> {
     super.dispose();
   }
 
+  DateTime? _dateTime;
+  void updateTimepoint() {
+    _dateTime = DateTime.now();
+  }
+
   void updateLichterkette() {
-    setState(() {});
+    setState(() {
+      updateTimepoint(); // last successful interaction
+    });
   }
 
   void refresh() {
-    setState(() => fetchLichterkette());
+    setState(() {
+      fetchLichterkette();
+    });
   }
 
   void refreshSwitchState() {
@@ -273,12 +286,24 @@ class _SwitchAppState extends State<SwitchApp> {
                     SpeedSlider(),
                   ]));
             } else if (snapshot.hasError) {
-              return IconButton(
-                icon: const Icon(Icons.refresh_sharp, color: Colors.amber),
-                iconSize: 60,
-                tooltip: 'Refresh',
-                onPressed: refresh,
-              );
+              return Center(
+                  child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                    IconButton(
+                      icon:
+                          const Icon(Icons.refresh_sharp, color: Colors.amber),
+                      iconSize: 60,
+                      tooltip: 'Refresh',
+                      onPressed: refresh,
+                    ),
+                    const Padding(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 10.0, vertical: 10.0),
+                        child: Text(
+                            "Failed to connect to Lichterkette!\nPlease check internet connection and settings and try again."))
+                  ]));
             }
           }
 
@@ -319,12 +344,24 @@ class _SwitchAppState extends State<SwitchApp> {
                         }
                       }));
             } else if (snapshot.hasError) {
-              return IconButton(
-                icon: const Icon(Icons.refresh_sharp, color: Colors.amber),
-                iconSize: 60,
-                tooltip: 'Refresh',
-                onPressed: refresh,
-              );
+              return Center(
+                  child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                    IconButton(
+                      icon:
+                          const Icon(Icons.refresh_sharp, color: Colors.amber),
+                      iconSize: 60,
+                      tooltip: 'Refresh',
+                      onPressed: refresh,
+                    ),
+                    const Padding(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 10.0, vertical: 10.0),
+                        child: Text(
+                            "Failed to connect to Lichterkette!\nPlease check internet connection and settings and try again."))
+                  ]));
             }
           }
           // By default, show a loading spinner.
@@ -337,7 +374,44 @@ class _SwitchAppState extends State<SwitchApp> {
             refresh: refresh,
             child: HostnameEdit(),
           ),
-          VersionInfo(),
+          Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15.0),
+            child: FutureBuilder<Lichterkette>(
+              // we wait for the future Lichterkette (if any update is in progress)
+              future: futureLichterkette,
+              builder: (context, snapshot) {
+                Duration duration = Duration.zero;
+                if (_dateTime != null) {
+                  duration = DateTime.now().difference(_dateTime!);
+                }
+                String unit;
+                int value = 0;
+                if (duration.inHours > 0) {
+                  unit = 'h';
+                  value = duration.inHours;
+                } else if (duration.inMinutes > 0) {
+                  unit = 'min';
+                  value = duration.inMinutes;
+                } else {
+                  unit = 's';
+                  value = duration.inSeconds;
+                }
+                if (snapshot.connectionState == ConnectionState.done) {
+                  if (snapshot.hasData) {
+                    return Text("Status: Connected ($value$unit ago)",
+                        style: TextStyle(color: Colors.green));
+                  } else if (snapshot.hasError) {
+                    return const Text("Status: Disconnected",
+                        style: TextStyle(color: Colors.redAccent));
+                  }
+                }
+                return const Text("Status: Connecting...",
+                    style: TextStyle(color: Colors.blue));
+              },
+            ),
+          ),
+          const VersionInfo(),
         ],
       )
     ];
@@ -1547,7 +1621,30 @@ class _VersionInfoState extends State<VersionInfo> {
                   snapshot.hasData) {
                 versionString = snapshot.data!;
               }
-              return Text("Version: $versionString");
+              const String urlString =
+                  "https://github.com/flachsenberg/Lichterkette";
+              return RichText(
+                  text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: "Version: $versionString\n",
+                    style: const TextStyle(color: Colors.black),
+                  ),
+                  const TextSpan(
+                      text:
+                          "Created by Florian Flachsenberg.\nOpen-source under MIT license, see:\n",
+                      style: TextStyle(color: Colors.black)),
+                  TextSpan(
+                    text: urlString,
+                    style: const TextStyle(color: Colors.blue),
+                    recognizer: TapGestureRecognizer()
+                      ..onTap = () {
+                        launchUrlString(
+                            'https://github.com/flachsenberg/Lichterkette');
+                      },
+                  ),
+                ],
+              ));
             }));
   }
 }
