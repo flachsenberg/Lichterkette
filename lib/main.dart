@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter/material.dart';
@@ -9,7 +10,6 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart' as intl;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 void main() => runApp(const SwitchApp());
@@ -165,6 +165,19 @@ class InitialParentProvider extends InheritedWidget {
   }
 }
 
+class LifeCycleEventHandler extends WidgetsBindingObserver {
+  final AsyncCallback resumeCallBack;
+
+  LifeCycleEventHandler({required this.resumeCallBack});
+
+  @override
+  Future<void> didChangeAppLifecycleState(AppLifecycleState state) async {
+    if (state == AppLifecycleState.resumed) {
+      await resumeCallBack();
+    }
+  }
+}
+
 class _SwitchAppState extends State<SwitchApp> {
   // This described a future Lichterkette that has been (or will be) fetched from remote!
   late Future<Lichterkette> futureLichterkette;
@@ -205,18 +218,20 @@ class _SwitchAppState extends State<SwitchApp> {
     }();
   }
 
-  Timer? timer;
+  late LifeCycleEventHandler _lifeCycleEventHandler;
 
   @override
   void initState() {
     super.initState();
+    _lifeCycleEventHandler =
+        LifeCycleEventHandler(resumeCallBack: () async => refresh());
+    WidgetsBinding.instance.addObserver(_lifeCycleEventHandler);
     fetchLichterkette();
-    timer = Timer.periodic(const Duration(seconds: 60), (Timer t) => refresh());
   }
 
   @override
   void dispose() {
-    timer?.cancel();
+    WidgetsBinding.instance.removeObserver(_lifeCycleEventHandler);
     super.dispose();
   }
 
