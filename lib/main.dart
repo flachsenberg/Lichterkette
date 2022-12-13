@@ -178,6 +178,8 @@ class LifeCycleEventHandler extends WidgetsBindingObserver {
   }
 }
 
+void Function()? closeDialogFunction;
+
 class _SwitchAppState extends State<SwitchApp> {
   // This described a future Lichterkette that has been (or will be) fetched from remote!
   late Future<Lichterkette> futureLichterkette;
@@ -223,8 +225,12 @@ class _SwitchAppState extends State<SwitchApp> {
   @override
   void initState() {
     super.initState();
-    _lifeCycleEventHandler =
-        LifeCycleEventHandler(resumeCallBack: () async => refresh());
+    _lifeCycleEventHandler = LifeCycleEventHandler(resumeCallBack: () async {
+      if (closeDialogFunction != null) {
+        closeDialogFunction!();
+      }
+      refresh();
+    });
     WidgetsBinding.instance.addObserver(_lifeCycleEventHandler);
     fetchLichterkette();
   }
@@ -682,12 +688,22 @@ class AddTimeIntervalButton extends StatefulWidget {
 
 class _AddTimeIntervalButtonState extends State<AddTimeIntervalButton> {
   bool _waiting = false;
+  bool _open = false;
+
+  void close() {
+    if (_open) {
+      Navigator.of(context).pop();
+    }
+  }
+
   void onPressed() {
     setState(() {
       _waiting = true;
     });
 
     () async {
+      _open = true;
+      closeDialogFunction = () => close();
       try {
         final selectedTimeRange = await showTimeRangePicker(
           context: context,
@@ -781,6 +797,8 @@ class _AddTimeIntervalButtonState extends State<AddTimeIntervalButton> {
           ParentProvider.of(context).refresh();
         }
       } finally {
+        _open = false;
+        closeDialogFunction = null;
         setState(() {
           _waiting = false;
         });
@@ -1166,6 +1184,13 @@ class LightColorPicker extends StatefulWidget {
 
 class _LightColorPickerState extends State<LightColorPicker> {
   bool _waiting = false;
+  bool _open = false;
+
+  void close() {
+    if (_open) {
+      Navigator.of(context).pop();
+    }
+  }
 
   void onColorChanged(Color color) {
     // Can happen if main windows refreshed in the mean time, simply ignore.
@@ -1234,7 +1259,10 @@ class _LightColorPickerState extends State<LightColorPicker> {
   }
 
   void onButtonPressed(Color color) {
-    showDialog<String>(
+    () async {
+      _open = true;
+      closeDialogFunction = () => close();
+      await showDialog<String>(
         context: context,
         builder: (BuildContext context) => AlertDialog(
               title: const Text('Pick a color!'),
@@ -1264,6 +1292,9 @@ class _LightColorPickerState extends State<LightColorPicker> {
                 ),
               ],
             ));
+      _open = false;
+      closeDialogFunction = null;
+    }();
   }
 
   @override
